@@ -58,124 +58,116 @@ resource "google_compute_url_map" "urlmap" {
   name        = "${var.name}-url-map"
   description = "URL map for ${var.name}"
 
-  default_service = google_compute_backend_bucket.static.self_link
+  default_service = google_compute_backend_service.microservice.id
 
   host_rule {
-    hosts        = ["*"]
-    path_matcher = "all"
+    hosts        = ["*.jon-deploy.com"]
+    path_matcher = "microservice"
+  }
+
+  host_rule {
+    hosts        = ["api.jon-deploy.com"]
+    path_matcher = "api"
   }
 
   path_matcher {
-    name            = "all"
-    default_service = google_compute_backend_bucket.static.self_link
+    name            = "microservice"
+    default_service = google_compute_backend_service.microservice.id
 
     path_rule {
-      paths   = ["/api", "/api/*"]
-      service = google_compute_backend_service.api.self_link
+      paths   = ["/ingest/start"]
+      service = google_compute_backend_service.microservice.id
     }
   }
-}
+  
+  path_matcher {
+    name            = "api"
+    default_service = google_compute_backend_service.api.id
 
-# ------------------------------------------------------------------------------
-# CREATE THE BACKEND SERVICE CONFIGURATION FOR THE INSTANCE GROUP
-# ------------------------------------------------------------------------------
-
-resource "google_compute_backend_service" "api" {
-  project = var.project
-
-  name        = "${var.name}-api"
-  description = "API Backend for ${var.name}"
-  port_name   = "http"
-  protocol    = "HTTP"
-  timeout_sec = 10
-  enable_cdn  = false
-
-  backend {
-    group = google_compute_instance_group.api.self_link
+    path_rule {
+      paths   = ["/ingest/*"]
+      service = google_compute_backend_service.api.id
+    }
   }
-
-  health_checks = [google_compute_health_check.default.self_link]
-
-  depends_on = [google_compute_instance_group.api]
 }
 
 # ------------------------------------------------------------------------------
 # CONFIGURE HEALTH CHECK FOR THE API BACKEND
 # ------------------------------------------------------------------------------
 
-resource "google_compute_health_check" "default" {
-  project = var.project
-  name    = "${var.name}-hc"
+# resource "google_compute_health_check" "default" {
+#   project = var.project
+#   name    = "${var.name}-hc"
 
-  http_health_check {
-    port         = 5000
-    request_path = "/api"
-  }
+#   http_health_check {
+#     port         = 5000
+#     request_path = "/api"
+#   }
 
-  check_interval_sec = 5
-  timeout_sec        = 5
-}
+#   check_interval_sec = 5
+#   timeout_sec        = 5
+# }
 
 # ------------------------------------------------------------------------------
 # CREATE THE STORAGE BUCKET FOR THE STATIC CONTENT
 # ------------------------------------------------------------------------------
 
-resource "google_storage_bucket" "static" {
-  project = var.project
+# resource "google_storage_bucket" "static" {
+#   project = var.project
 
-  name          = "${var.name}-bucket"
-  location      = var.static_content_bucket_location
-  storage_class = "MULTI_REGIONAL"
+#   name          = "${var.name}-bucket"
+#   location      = var.static_content_bucket_location
+#   storage_class = "MULTI_REGIONAL"
 
-  website {
-    main_page_suffix = "index.html"
-    not_found_page   = "404.html"
-  }
+#   website {
+#     main_page_suffix = "index.html"
+#     not_found_page   = "404.html"
+#   }
 
-  # For the example, we want to clean up all resources. In production, you should set this to false to prevent
-  # accidental loss of data
-  force_destroy = true
+#   # For the example, we want to clean up all resources. In production, you should set this to false to prevent
+#   # accidental loss of data
+#   force_destroy = true
 
-  labels = var.custom_labels
-}
+#   labels = var.custom_labels
+# }
 
 # ------------------------------------------------------------------------------
 # CREATE THE BACKEND FOR THE STORAGE BUCKET
 # ------------------------------------------------------------------------------
 
-resource "google_compute_backend_bucket" "static" {
-  project = var.project
+# resource "google_compute_backend_bucket" "static" {
+#   project = var.project
 
-  name        = "${var.name}-backend-bucket"
-  bucket_name = google_storage_bucket.static.name
-}
+#   name        = "${var.name}-backend-bucket"
+#   bucket_name = google_storage_bucket.static.name
+# }
 
-# ------------------------------------------------------------------------------
-# UPLOAD SAMPLE CONTENT WITH PUBLIC READ ACCESS
-# ------------------------------------------------------------------------------
+# # ------------------------------------------------------------------------------
+# # UPLOAD SAMPLE CONTENT WITH PUBLIC READ ACCESS
+# # ------------------------------------------------------------------------------
 
-resource "google_storage_default_object_acl" "website_acl" {
-  bucket      = google_storage_bucket.static.name
-  role_entity = ["READER:allUsers"]
-}
+# resource "google_storage_default_object_acl" "website_acl" {
+#   bucket      = google_storage_bucket.static.name
+#   role_entity = ["READER:allUsers"]
+# }
 
-resource "google_storage_bucket_object" "index" {
-  name    = "index.html"
-  content = "Hello, World!"
-  bucket  = google_storage_bucket.static.name
+# resource "google_storage_bucket_object" "index" {
+#   name    = "index.html"
+#   content = "Hello, World!"
+#   bucket  = google_storage_bucket.static.name
 
-  # We have to depend on the ACL because otherwise the ACL could get created after the object
-  depends_on = [google_storage_default_object_acl.website_acl]
-}
+#   # We have to depend on the ACL because otherwise the ACL could get created after the object
+#   depends_on = [google_storage_default_object_acl.website_acl]
+# }
 
-resource "google_storage_bucket_object" "not_found" {
-  name    = "404.html"
-  content = "Uh oh"
-  bucket  = google_storage_bucket.static.name
+# resource "google_storage_bucket_object" "not_found" {
+#   name    = "404.html"
+#   content = "Uh oh"
+#   bucket  = google_storage_bucket.static.name
 
-  # We have to depend on the ACL because otherwise the ACL could get created after the object
-  depends_on = [google_storage_default_object_acl.website_acl]
-}
+#   # We have to depend on the ACL because otherwise the ACL could get created after the object
+#   depends_on = [google_storage_default_object_acl.website_acl]
+# }
 
 # ------------------------------------------------------------------------------
 # IF SSL IS ENABLED, CREATE A SELF-SIGNED CERTIFICATE
@@ -229,56 +221,109 @@ resource "google_compute_ssl_certificate" "certificate" {
 
 # ------------------------------------------------------------------------------
 # CREATE THE INSTANCE GROUP WITH A SINGLE INSTANCE AND THE BACKEND SERVICE CONFIGURATION
-#
 # We use the instance group only to highlight the ability to specify multiple types
 # of backends for the load balancer
 # ------------------------------------------------------------------------------
 
-resource "google_compute_instance_group" "api" {
-  project   = var.project
-  name      = "${var.name}-instance-group"
-  zone      = var.zone
-  instances = [google_compute_instance.api.self_link]
-
-  lifecycle {
-    create_before_destroy = true
-  }
-
-  named_port {
-    name = "http"
-    port = 5000
+resource "google_compute_region_network_endpoint_group" "microservice_proxy" {
+  provider=google-beta
+  name                  = "microserevice-endpoint"
+  network_endpoint_type = "SERVERLESS"
+  region                = var.region
+  cloud_run {
+    url_mask            = var.url_mask
   }
 }
 
-resource "google_compute_instance" "api" {
-  project      = var.project
-  name         = "${var.name}-instance"
-  machine_type = "f1-micro"
-  zone         = var.zone
-
-  # We're tagging the instance with the tag specified in the firewall rule
-  tags = ["private-app"]
-
-  boot_disk {
-    initialize_params {
-      image = "debian-cloud/debian-9"
-    }
-  }
-
-  # Make sure we have the flask application running
-  metadata_startup_script = file("${path.module}/examples/shared/startup_script.sh")
-
-  # Launch the instance in the default subnetwork
-  network_interface {
-    subnetwork = "default"
-
-    # This gives the instance a public IP address for internet connectivity. Normally, you would have a Cloud NAT,
-    # but for the sake of simplicity, we're assigning a public IP to get internet connectivity
-    # to be able to run startup scripts
-    access_config {
-    }
+resource "google_compute_region_network_endpoint_group" "api_proxy" {
+  provider=google-beta
+  name                  = "api-endpoint"
+  network_endpoint_type = "SERVERLESS"
+  region                = var.api-region
+  cloud_run {
+    url_mask            = var.url_mask
   }
 }
+
+# resource "google_compute_region_network_endpoint" "proxy" {
+#   provider=google-beta
+#   global_network_endpoint_group = google_compute_global_network_endpoint_group.external_proxy.id
+#   fqdn                          = "jon-deploy.com"
+#   port                          = google_compute_global_network_endpoint_group.external_proxy.default_port
+# }
+
+resource "google_compute_backend_service" "microservice" {
+  provider=google-beta
+  name                            = "microservice-backend"
+  enable_cdn                      = true
+
+  # custom_request_headers          = ["host: ${google_compute_global_network_endpoint.proxy.fqdn}"]
+  # custom_response_headers         = ["X-Cache-Hit: {cdn_cache_status}"]
+
+  backend {
+    group = google_compute_region_network_endpoint_group.microservice_proxy.id
+  }
+}
+
+resource "google_compute_backend_service" "api" {
+  provider=google-beta
+  name                            = "tf-api-backend"
+  enable_cdn                      = true
+
+  # custom_request_headers          = ["host: ${google_compute_global_network_endpoint.proxy.fqdn}"]
+  # custom_response_headers         = ["X-Cache-Hit: {cdn_cache_status}"]
+
+  backend {
+    group = google_compute_region_network_endpoint_group.api_proxy.id
+  }
+}
+
+
+# resource "google_compute_instance_group" "api" {
+#   project   = var.project
+#   name      = "${var.name}-instance-group"
+#   zone      = var.zone
+#   instances = [google_compute_instance.api.self_link]
+
+#   lifecycle {
+#     create_before_destroy = true
+#   }
+
+#   named_port {
+#     name = "http"
+#     port = 5000
+#   }
+# }
+
+# resource "google_compute_instance" "api" {
+#   project      = var.project
+#   name         = "${var.name}-instance"
+#   machine_type = "f1-micro"
+#   zone         = var.zone
+
+#   # We're tagging the instance with the tag specified in the firewall rule
+#   tags = ["private-app"]
+
+#   boot_disk {
+#     initialize_params {
+#       image = "debian-cloud/debian-9"
+#     }
+#   }
+
+#   # Make sure we have the flask application running
+#   metadata_startup_script = file("${path.module}/examples/shared/startup_script.sh")
+
+#   # Launch the instance in the default subnetwork
+#   network_interface {
+#     subnetwork = "default"
+
+#     # This gives the instance a public IP address for internet connectivity. Normally, you would have a Cloud NAT,
+#     # but for the sake of simplicity, we're assigning a public IP to get internet connectivity
+#     # to be able to run startup scripts
+#     access_config {
+#     }
+#   }
+# }
 
 # ------------------------------------------------------------------------------
 # CREATE A FIREWALL TO ALLOW ACCESS FROM THE LB TO THE INSTANCE

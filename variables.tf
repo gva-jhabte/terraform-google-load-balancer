@@ -6,17 +6,25 @@
 variable "project" {
   description = "The project ID to create the resources in."
   type        = string
+  default       = "jon-deploy-project"
 }
 
 variable "region" {
   description = "The region to create the resources in."
   type        = string
+  default       = "europe-west1"
 }
 
-variable "zone" {
-  description = "The availability zone to create the sample compute instances in. Must within the region specified in 'var.region'"
+variable "api-region" {
+  description = "The region to create the api-gateway in."
   type        = string
+  default       = "europe-west4"
 }
+
+# variable "zone" {
+#   description = "The availability zone to create the sample compute instances in. Must within the region specified in 'var.region'"
+#   type        = string
+# }
 
 # ---------------------------------------------------------------------------------------------------------------------
 # OPTIONAL PARAMETERS
@@ -26,25 +34,25 @@ variable "zone" {
 variable "name" {
   description = "Name for the load balancer forwarding rule and prefix for supporting resources."
   type        = string
-  default     = "http-multi-backend"
+  default     = "https-lb"
 }
 
 variable "enable_ssl" {
   description = "Set to true to enable ssl. If set to 'true', you will also have to provide 'var.custom_domain_name'."
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "enable_http" {
   description = "Set to true to enable plain http. Note that disabling http does not force SSL and/or redirect HTTP traffic. See https://issuetracker.google.com/issues/35904733"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "static_content_bucket_location" {
   description = "Location of the bucket that will store the static content. Once a bucket has been created, its location can't be changed. See https://cloud.google.com/storage/docs/bucket-locations"
   type        = string
-  default     = "US"
+  default     = "EU"
 }
 
 variable "create_dns_entry" {
@@ -56,7 +64,14 @@ variable "create_dns_entry" {
 variable "custom_domain_name" {
   description = "Custom domain name."
   type        = string
-  default     = ""
+  default     = "jon-deploy.com"
+}
+
+
+variable "url_mask" {
+  description = "Custom domain name."
+  type        = string
+  default     = "<service>.jon-deploy.com"
 }
 
 variable "dns_managed_zone_name" {
